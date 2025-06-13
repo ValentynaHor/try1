@@ -11,6 +11,7 @@
 #include "iostream"
 #include <ctime>
 #include "string"
+#include <commctrl.h>
 
 #define MAX_LOADSTRING 100
 //перенайменування макросів
@@ -327,6 +328,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     notesi.cb = sizeof(notesi);
     ZeroMemory(&notepi, sizeof(notepi));
 
+    INITCOMMONCONTROLSEX icc;
+    icc.dwSize = sizeof(icc);
+    icc.dwICC = ICC_WIN95_CLASSES;
+    InitCommonControlsEx(&icc);
+
 
     // Ініціалізація глобальних рядків
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -598,77 +604,93 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
 
                 //якщо гра вже починалась - видалити старі данні
-                if (rPole1 != nullptr) {
+                if (rPole1) {
                     for (int i = 0; i < prevnumKol; i++) {
-                        if (rPole1[i] != nullptr) {
-                            delete[] rPole1[i];
-                            rPole1[i] = nullptr;
-                        }
-                        if (rPole2[i] != nullptr) {
-                            delete[] rPole2[i];
-                            rPole2[i] = nullptr;
-                        }
-
-                        if (Player1.ShipMap.myarena && Player1.ShipMap.myarena[i]) {
-                            delete[] Player1.ShipMap.myarena[i];
-                            Player1.ShipMap.myarena[i] = nullptr;
-                        }
-                        if (Player1.ShipMap.oponentarena && Player1.ShipMap.oponentarena[i]) {
-                            delete[] Player1.ShipMap.oponentarena[i];
-                            Player1.ShipMap.oponentarena[i] = nullptr;
-                        }
-                        if (Player1.ShipMap.ShipNum && Player1.ShipMap.ShipNum[i]) {
-                            delete[] Player1.ShipMap.ShipNum[i];
-                            Player1.ShipMap.ShipNum[i] = nullptr;
-                        }
-                        if (Player1.ShipMap.ShipSize && Player1.ShipMap.ShipSize[i]) {
-                            delete[] Player1.ShipMap.ShipSize[i];
-                            Player1.ShipMap.ShipSize[i] = nullptr;
-                        }
-                        if (Player2.ShipMap.myarena && Player2.ShipMap.myarena[i]) {
-                            delete[] Player2.ShipMap.myarena[i];
-                            Player2.ShipMap.myarena[i] = nullptr;
-                        }
-                        if (Player2.ShipMap.oponentarena && Player2.ShipMap.oponentarena[i]) {
-                            delete[] Player2.ShipMap.oponentarena[i];
-                            Player2.ShipMap.oponentarena[i] = nullptr;
-                        }
-                        if (Player2.ShipMap.ShipNum && Player2.ShipMap.ShipNum[i]) {
-                            delete[] Player2.ShipMap.ShipNum[i];
-                            Player2.ShipMap.ShipNum[i] = nullptr;
-                        }
-                        if (Player2.ShipMap.ShipSize && Player2.ShipMap.ShipSize[i]) {
-                            delete[] Player2.ShipMap.ShipSize[i];
-                            Player2.ShipMap.ShipSize[i] = nullptr;
-                        }
+                        if (rPole1[i]) { delete[] rPole1[i]; rPole1[i] = nullptr; }
                     }
                     delete[] rPole1;
-                    delete[] rPole2;
                     rPole1 = nullptr;
+                }
+                if (rPole2) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (rPole2[i]) { delete[] rPole2[i]; rPole2[i] = nullptr; }
+                    }
+                    delete[] rPole2;
                     rPole2 = nullptr;
+                }
 
-                    if (Player1.ShipMap.myarena) { delete[] Player1.ShipMap.myarena; Player1.ShipMap.myarena = nullptr; }
-                    if (Player1.ShipMap.oponentarena) { delete[] Player1.ShipMap.oponentarena; Player1.ShipMap.oponentarena = nullptr; }
-                    if (Player1.ShipMap.ShipNum) { delete[] Player1.ShipMap.ShipNum; Player1.ShipMap.ShipNum = nullptr; }
-                    if (Player1.ShipMap.ShipSize) { delete[] Player1.ShipMap.ShipSize; Player1.ShipMap.ShipSize = nullptr; }
-                    if (Player2.ShipMap.myarena) { delete[] Player2.ShipMap.myarena; Player2.ShipMap.myarena = nullptr; }
-                    if (Player2.ShipMap.oponentarena) { delete[] Player2.ShipMap.oponentarena; Player2.ShipMap.oponentarena = nullptr; }
-                    if (Player2.ShipMap.ShipNum) { delete[] Player2.ShipMap.ShipNum; Player2.ShipMap.ShipNum = nullptr; }
-                    if (Player2.ShipMap.ShipSize) { delete[] Player2.ShipMap.ShipSize; Player2.ShipMap.ShipSize = nullptr; }
+                if (Player1.ShipMap.myarena) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player1.ShipMap.myarena[i]) { delete[] Player1.ShipMap.myarena[i]; Player1.ShipMap.myarena[i] = nullptr; }
+                    }
+                    delete[] Player1.ShipMap.myarena;
+                    Player1.ShipMap.myarena = nullptr;
+                }
+                if (Player1.ShipMap.oponentarena) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player1.ShipMap.oponentarena[i]) { delete[] Player1.ShipMap.oponentarena[i]; Player1.ShipMap.oponentarena[i] = nullptr; }
+                    }
+                    delete[] Player1.ShipMap.oponentarena;
+                    Player1.ShipMap.oponentarena = nullptr;
+                }
+                if (Player1.ShipMap.ShipNum) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player1.ShipMap.ShipNum[i]) { delete[] Player1.ShipMap.ShipNum[i]; Player1.ShipMap.ShipNum[i] = nullptr; }
+                    }
+                    delete[] Player1.ShipMap.ShipNum;
+                    Player1.ShipMap.ShipNum = nullptr;
+                }
+                if (Player1.ShipMap.ShipSize) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player1.ShipMap.ShipSize[i]) { delete[] Player1.ShipMap.ShipSize[i]; Player1.ShipMap.ShipSize[i] = nullptr; }
+                    }
+                    delete[] Player1.ShipMap.ShipSize;
+                    Player1.ShipMap.ShipSize = nullptr;
+                }
+                if (Player2.ShipMap.myarena) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player2.ShipMap.myarena[i]) { delete[] Player2.ShipMap.myarena[i]; Player2.ShipMap.myarena[i] = nullptr; }
+                    }
+                    delete[] Player2.ShipMap.myarena;
+                    Player2.ShipMap.myarena = nullptr;
+                }
+                if (Player2.ShipMap.oponentarena) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player2.ShipMap.oponentarena[i]) { delete[] Player2.ShipMap.oponentarena[i]; Player2.ShipMap.oponentarena[i] = nullptr; }
+                    }
+                    delete[] Player2.ShipMap.oponentarena;
+                    Player2.ShipMap.oponentarena = nullptr;
+                }
+                if (Player2.ShipMap.ShipNum) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player2.ShipMap.ShipNum[i]) { delete[] Player2.ShipMap.ShipNum[i]; Player2.ShipMap.ShipNum[i] = nullptr; }
+                    }
+                    delete[] Player2.ShipMap.ShipNum;
+                    Player2.ShipMap.ShipNum = nullptr;
+                }
+                if (Player2.ShipMap.ShipSize) {
+                    for (int i = 0; i < prevnumKol; i++) {
+                        if (Player2.ShipMap.ShipSize[i]) { delete[] Player2.ShipMap.ShipSize[i]; Player2.ShipMap.ShipSize[i] = nullptr; }
+                    }
+                    delete[] Player2.ShipMap.ShipSize;
+                    Player2.ShipMap.ShipSize = nullptr;
+                }
 
-                for (int i = 0; i < Player1.BiggestShip; i++) {
+                if (Player1.Ships && Player2.Ships) {
+                    for (int i = 0; i < Player1.BiggestShip; i++) {
 
-                    if (Player1.Ships[i].posKols) { delete[] Player1.Ships[i].posKols; Player1.Ships[i].posKols = nullptr; }
-                    if (Player1.Ships[i].posRows) { delete[] Player1.Ships[i].posRows; Player1.Ships[i].posRows = nullptr; }
-                    if (Player1.Ships[i].orientation) { delete[] Player1.Ships[i].orientation; Player1.Ships[i].orientation = nullptr; }
-                    if (Player1.Ships[i].dead) { delete[] Player1.Ships[i].dead; Player1.Ships[i].dead = nullptr; }
-                    if (Player1.Ships[i].damage) { delete[] Player1.Ships[i].damage; Player1.Ships[i].damage = nullptr; }
+                        if (Player1.Ships[i].posKols) { delete[] Player1.Ships[i].posKols; Player1.Ships[i].posKols = nullptr; }
+                        if (Player1.Ships[i].posRows) { delete[] Player1.Ships[i].posRows; Player1.Ships[i].posRows = nullptr; }
+                        if (Player1.Ships[i].orientation) { delete[] Player1.Ships[i].orientation; Player1.Ships[i].orientation = nullptr; }
+                        if (Player1.Ships[i].dead) { delete[] Player1.Ships[i].dead; Player1.Ships[i].dead = nullptr; }
+                        if (Player1.Ships[i].damage) { delete[] Player1.Ships[i].damage; Player1.Ships[i].damage = nullptr; }
 
-                    if (Player2.Ships[i].posKols) { delete[] Player2.Ships[i].posKols; Player2.Ships[i].posKols = nullptr; }
-                    if (Player2.Ships[i].posRows) { delete[] Player2.Ships[i].posRows; Player2.Ships[i].posRows = nullptr; }
-                    if (Player2.Ships[i].orientation) { delete[] Player2.Ships[i].orientation; Player2.Ships[i].orientation = nullptr; }
-                    if (Player2.Ships[i].dead) { delete[] Player2.Ships[i].dead; Player2.Ships[i].dead = nullptr; }
-                    if (Player2.Ships[i].damage) { delete[] Player2.Ships[i].damage; Player2.Ships[i].damage = nullptr; }
+                        if (Player2.Ships[i].posKols) { delete[] Player2.Ships[i].posKols; Player2.Ships[i].posKols = nullptr; }
+                        if (Player2.Ships[i].posRows) { delete[] Player2.Ships[i].posRows; Player2.Ships[i].posRows = nullptr; }
+                        if (Player2.Ships[i].orientation) { delete[] Player2.Ships[i].orientation; Player2.Ships[i].orientation = nullptr; }
+                        if (Player2.Ships[i].dead) { delete[] Player2.Ships[i].dead; Player2.Ships[i].dead = nullptr; }
+                        if (Player2.Ships[i].damage) { delete[] Player2.Ships[i].damage; Player2.Ships[i].damage = nullptr; }
+                    }
                 }
 
                 if (Player1.Ships) { delete[] Player1.Ships; Player1.Ships = nullptr; }
@@ -937,7 +959,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ButtonSettings:
             case ID_SETTINGS:
             {
-                if (DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), hWnd, ChangeSettingsProc) == 2)
+                INT_PTR ret = DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), hWnd, ChangeSettingsProc);
+                if (ret == -1) {
+                    MessageBoxW(hWnd, L"Не вдалося відкрити діалог налаштувань", L"Помилка", MB_OK | MB_ICONERROR);
+                    break;
+                }
+                if (ret == 2)
                     break;//якщо натиснуто Скасувати - нічого не робити
                 //зберегти налаштування
                 SetFileSettingsText();
@@ -1232,8 +1259,6 @@ INT_PTR CALLBACK ChangeSettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
             (((flags & (1 << CHECK_PLAY_WITH_BOT)) == 1)) ? (BST_CHECKED) : (BST_UNCHECKED), 0);
 
         return (INT_PTR)TRUE;
-
-        break;
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
