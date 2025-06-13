@@ -35,6 +35,7 @@
 #define IDC_EDITtime4                   1007
 #define IDC_CHECKbot1                   1008
 #define IDC_EDITpercente                1009
+#define IDC_RESETDEFAULTS               1010
 #define ID_32771                        32771
 #define ID_                             32772
 #define ID_SETTINGS                     32773
@@ -50,7 +51,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        148
 #define _APS_NEXT_COMMAND_VALUE         32777
-#define _APS_NEXT_CONTROL_VALUE         1010
+#define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

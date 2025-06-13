@@ -2,7 +2,7 @@
 //Реалізувати гру «Морський бій на безмежному полі» 
 //На поле можливо роз-містити 4 однопалубних, 3 двопалубних, 2 трипалубних та 1 чотирьохпалубний корабель. 
 //Програма випадковим чином розміщує кораблі, після чого гравець робить постріли у вигляді пари чисел (номер рядку та номер стовпця). \
-    Комп'ю-тер повідомляє: убитий корабель, поранений або повз. Після того, як всі кораблі знищені, комп'ютер видає повідомлення \
+    Опонент повідомляє: убитий корабель, поранений або повз. Після того, як всі кораблі знищені, програма видає повідомлення \
     про закінчення гри, повідомляє число ходів та пропонує занести результат у таблицю.
 
 #include "framework.h"
@@ -85,6 +85,10 @@ int CellSide = 30;
 int percentAllShips = 33;
 //всього кораблів
 int numShips = 0;
+//стан штучного інтелекту бота
+int botLastHitX = -1, botLastHitY = -1;
+int botDirIndex = 0;
+bool botHunting = false;
 //поточний час
 time_t tnow = 0;
 //час системи на початку гри
@@ -160,7 +164,8 @@ struct MyPlayers
 {
     MyPlayers() {
         memset(name, 0, sizeof(name));//обнулення
-        wcscpy_s(name, L"Player");//стандартне ім'я
+        // стандартне ім'я українською
+        wcscpy_s(name, L"Гравець");
     }
     //ім'я
     wchar_t name[255];
@@ -287,6 +292,8 @@ void BotStep(HWND hWnd);
 int WchartSize(wchar_t*);
 //отримати текст файлу історії
 char* GetHistoryTextlpws();
+//перевірити коректність розміщення корабля
+bool CheckShipPlacement(int x, int y, int size, bool vert, MyPlayers* pl);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -460,6 +467,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         InvalidateRect(hWnd, NULL, TRUE);
         }
         break;
+    case WM_SIZE:
+    {
+        //оновити розміри та центр полів при зміні розміру вікна
+        width = LOWORD(lParam);
+        height = HIWORD(lParam);
+        GenerateArenaRects();
+        //переміщення елементів інтерфейсу
+        MoveWindow(BStart.hControl, width / 2 - 75, height / 3, 150, 80, TRUE);
+        MoveWindow(BSettings.hControl, width / 2 - 75, height / 3 + 80, 150, 80, TRUE);
+        MoveWindow(Bhistory.hControl, width / 2 - 75, height / 3 + 160, 150, 80, TRUE);
+        MoveWindow(BShowMyArena.hControl, width - 255, 5, 250, 40, TRUE);
+        MoveWindow(EHistory.hControl, width / 4, height / 4, width / 2, height / 2, TRUE);
+        MoveWindow(BClear.hControl, width / 2, 10, 250, 40, TRUE);
+        InvalidateRect(hWnd, NULL, TRUE);
+    }
+        break;
     case WM_CREATE:
     {
         GetFileSettings();
@@ -608,7 +631,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 PlayerSetNow = &Player1;
                 PlayerOponent = &Player2;
-            wcscpy_s(Player2.name, L"Bot");//далі - якщо гра не з ботом - ім'я 2го гравця зміниться
+            // назва бота українською
+            wcscpy_s(Player2.name, L"Бот");//далі - якщо гра не з ботом - ім'я 2го гравця зміниться
 
             //перевірка встановлення прапора гри з ботом
             if ( ((flags & (1 << CHECK_PLAY_WITH_BOT)) == 0) )
@@ -871,7 +895,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
                 break;
             case IDM_MYABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+            {
+                // Відобразити правила гри в простому діалозі
+                MessageBoxW(hWnd,
+                    L"Морський бій: розташуйте кораблі так, щоб вони не торкалися один одного.\n"
+                    L"Гравці по черзі роблять постріли по чужому полю, перемагає той, хто першим потопить усі кораблі супротивника.",
+                    L"Про гру", MB_OK | MB_ICONINFORMATION);
+            }
                 break;
             case ID_EXIT_GAME:
             {
@@ -1023,6 +1053,17 @@ INT_PTR CALLBACK GetNameProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
         swprintf_s(StrnumKol, L"%d", numKol);
         swprintf_s(StrnumRow, L"%d", numRow);
 
+        // центр вікна на екрані
+        {
+            RECT rc; GetWindowRect(hDlg, &rc);
+            int w = rc.right - rc.left;
+            int h = rc.bottom - rc.top;
+            SetWindowPos(hDlg, HWND_TOP,
+                (GetSystemMetrics(SM_CXSCREEN) - w) / 2,
+                (GetSystemMetrics(SM_CYSCREEN) - h) / 2,
+                0, 0, SWP_NOZORDER | SWP_NOSIZE);
+        }
+
         //отримаємо хендли полів вводу
         hEditName1 = GetDlgItem(hDlg, IDC_EDITname1);
         hEditName2 = GetDlgItem(hDlg, IDC_EDITname2);
@@ -1091,6 +1132,7 @@ INT_PTR CALLBACK ChangeSettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
     HWND hEditCellSide;
     HWND hEditPercentShip;
     HWND hCheckboxBot;
+    HWND hResetBtn;
 
     //отримаємо хендли полів вводу
     hEditKol = GetDlgItem(hDlg, IDC_EDITkols1);
@@ -1098,6 +1140,9 @@ INT_PTR CALLBACK ChangeSettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
     hEditCellSide = GetDlgItem(hDlg, IDC_EDITcellside3);
     hEditPercentShip = GetDlgItem(hDlg, IDC_EDITpercente);
     hCheckboxBot = GetDlgItem(hDlg, IDC_CHECKbot1);
+    // створюємо кнопку скидання налаштувань
+    hResetBtn = CreateWindowW(L"button", L"Reset Defaults", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        10, 130, 90, 20, hDlg, (HMENU)IDC_RESETDEFAULTS, hInst, NULL);
     
     //рядки для отримання чисел з текстових полів
     wchar_t StrnumKol[255];
@@ -1114,6 +1159,17 @@ INT_PTR CALLBACK ChangeSettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
         swprintf_s(StrnumRow, L"%d", numRow);
         swprintf_s(StrCellSide, L"%d", CellSide);
         swprintf_s(StrPercentShip, L"%d", percentAllShips);
+
+        // центр вікна
+        {
+            RECT rc; GetWindowRect(hDlg, &rc);
+            int w = rc.right - rc.left;
+            int h = rc.bottom - rc.top;
+            SetWindowPos(hDlg, HWND_TOP,
+                (GetSystemMetrics(SM_CXSCREEN) - w) / 2,
+                (GetSystemMetrics(SM_CYSCREEN) - h) / 2,
+                0, 0, SWP_NOZORDER | SWP_NOSIZE);
+        }
 
         //Запишему у текстові поля збережену інформацію
         SendMessageW(hEditKol, WM_SETTEXT, 0, (LPARAM)StrnumKol);
@@ -1279,19 +1335,22 @@ void ShowMenu() {
 //генерація прямокутників арени
 void GenerateArenaRects() {
     /*ІГРОВЕ ПОЛЕ*/
-        //визначення положення першого ігрового поля
-    MainRect1.left = 10;//x
-    MainRect1.top = 10 + heightHeader;//y
+    //центруємо два поля відносно вікна
+    int gridW = (CellSide + 1) * numKol;
+    int gridH = (CellSide + 1) * numRow;
+    int totalW = gridW * 2 + CellSide * 2;
+    MainRect1.left = (width - totalW) / 2;
+    MainRect1.top = heightHeader + (height - heightHeader - gridH) / 2;
 
-    MainRect1.right = 10 + (CellSide + 1) * numKol;//x
-    MainRect1.bottom = MainRect1.top + (CellSide + 1) * numRow;//y
+    MainRect1.right = MainRect1.left + gridW;
+    MainRect1.bottom = MainRect1.top + gridH;
 
-    //визначення положення другого ігрового поля
-    MainRect2.left = MainRect1.right + (CellSide * 2);//x
-    MainRect2.top = 10 + heightHeader;//y
+    //друге поле відступає на дві клітинки
+    MainRect2.left = MainRect1.right + (CellSide * 2);
+    MainRect2.top = MainRect1.top;
 
-    MainRect2.right = MainRect2.left + (CellSide + 1) * numKol;//x
-    MainRect2.bottom = MainRect2.top + (CellSide + 1) * numRow;//y
+    MainRect2.right = MainRect2.left + gridW;
+    MainRect2.bottom = MainRect2.top + gridH;
 
     //визначення положень клітинок у полях
     rPole1 = new RECT * [numKol];
@@ -1344,12 +1403,21 @@ void PaintSetPlayerArena(HDC hdc) {
                 && rPole1[i][j].left - HScrolInf.nPos <= width
                 && rPole1[i][j].bottom - VScrolInf.nPos >= 0
                 && rPole1[i][j].top - VScrolInf.nPos <= height)
-            { 
+            {
                 Rectangle(hdc, rPole1[i][j].left - HScrolInf.nPos,
                     rPole1[i][j].top - VScrolInf.nPos,
                     rPole1[i][j].right - HScrolInf.nPos,
                     rPole1[i][j].bottom - VScrolInf.nPos);
             }
+    }
+    for (int i = 0; i < numKol; ++i) {
+        wchar_t ch = L'A' + i;
+        TextOutW(hdc, rPole1[i][0].left + CellSide/2 - HScrolInf.nPos, MainRect1.top - tm.tmHeight - VScrolInf.nPos, &ch, 1);
+    }
+    for (int j = 0; j < numRow; ++j) {
+        wchar_t numbuf[3];
+        swprintf_s(numbuf, L"%d", j + 1);
+        TextOutW(hdc, MainRect1.left - 2*tm.tmAveCharWidth - HScrolInf.nPos, rPole1[0][j].top + CellSide/2 - VScrolInf.nPos, numbuf, wcslen(numbuf));
     }
     // малювати кораблики
     for (int i = 0; i < numKol; i++) {
@@ -1497,6 +1565,10 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
     swprintf_s(StrInt, L"%d", Player2.Kills);
     TextOutW(hdc, 100 * tm.tmAveCharWidth - HScrolInf.nPos, 5 + (tm.tmHeight * 2) + (2 * 2) - VScrolInf.nPos, StrInt, WchartSize(StrInt));
 
+    //поточний хід
+    const wchar_t* turn = (PlayerSetNow == &Player1) ? L"Хід гравця" : L"Хід бота";
+    TextOutW(hdc, width/2 - 5*tm.tmAveCharWidth - HScrolInf.nPos, heightHeader/2 - VScrolInf.nPos, turn, wcslen(turn));
+
     
     HBRUSH hB;//пензлик для малювання прямокутника
 
@@ -1520,14 +1592,26 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
     //відображення клітинок першого поля (tam постріли)
     for (int i = 0; i < numKol; i++) {
         for (int j = 0; j < numRow; j++)
-            if (rPole1[i][j].right - HScrolInf.nPos >= 0 
-                && rPole1[i][j].left - HScrolInf.nPos <= width 
+            if (rPole1[i][j].right - HScrolInf.nPos >= 0
+                && rPole1[i][j].left - HScrolInf.nPos <= width
                 && rPole1[i][j].bottom - VScrolInf.nPos >= 0
                 && rPole1[i][j].top - VScrolInf.nPos <= height)
             Rectangle(hdc,  rPole1[i][j].left - HScrolInf.nPos,
                             rPole1[i][j].top - VScrolInf.nPos,
                             rPole1[i][j].right - HScrolInf.nPos,
                             rPole1[i][j].bottom - VScrolInf.nPos);
+    }
+    //підписи координат полів
+    for (int i = 0; i < numKol; ++i) {
+        wchar_t ch = L'A' + i;
+        TextOutW(hdc, rPole1[i][0].left + CellSide/2 - HScrolInf.nPos, MainRect1.top - tm.tmHeight - VScrolInf.nPos, &ch, 1);
+        TextOutW(hdc, rPole2[i][0].left + CellSide/2 - HScrolInf.nPos, MainRect2.top - tm.tmHeight - VScrolInf.nPos, &ch, 1);
+    }
+    for (int j = 0; j < numRow; ++j) {
+        wchar_t numbuf[3];
+        swprintf_s(numbuf, L"%d", j + 1);
+        TextOutW(hdc, MainRect1.left - 2*tm.tmAveCharWidth - HScrolInf.nPos, rPole1[0][j].top + CellSide/2 - VScrolInf.nPos, numbuf, wcslen(numbuf));
+        TextOutW(hdc, MainRect2.left - 2*tm.tmAveCharWidth - HScrolInf.nPos, rPole2[0][j].top + CellSide/2 - VScrolInf.nPos, numbuf, wcslen(numbuf));
     }
     //малювати потоплені кораблі опонента
     //малювати власні постріли/влучання (-1 пусто 1 промах(водяні кола) 2 влучив в корабель(вогонь))
@@ -1602,6 +1686,10 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
                 DeleteDC(hdcMem);
                 //SetWorldTransform(hdc, NULL);
                 DeleteObject(hBitmap);
+                // додатковий кольоровий ефект
+                hB = CreateSolidBrush(RGB(100,100,255));
+                FillRect(hdc, &rPole1[i][j], hB);
+                DeleteObject(hB);
             }
             else if (PlayerSetNow->ShipMap.oponentarena[i][j] == 2) {
                 //малюємо полум'я
@@ -1624,6 +1712,9 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
                 DeleteDC(hdcMem);
                 //SetWorldTransform(hdc, NULL);
                 DeleteObject(hBitmap);
+                hB = CreateSolidBrush(RGB(255,0,0));
+                FillRect(hdc, &rPole1[i][j], hB);
+                DeleteObject(hB);
             }
 
         }
@@ -1719,6 +1810,9 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
                     DeleteDC(hdcMem);
                     //SetWorldTransform(hdc, NULL);
                     DeleteObject(hBitmap);
+                    hB = CreateSolidBrush(RGB(100,100,255));
+                    FillRect(hdc, &rPole2[i][j], hB);
+                    DeleteObject(hB);
                 }
                 else if (PlayerOponent->ShipMap.oponentarena[i][j] == 2) {
                     //малюємо полум'я
@@ -1741,6 +1835,9 @@ void PaintArena(/*HWND hWnd*/HDC hdc) {
                     DeleteDC(hdcMem);
                     //SetWorldTransform(hdc, NULL);
                     DeleteObject(hBitmap);
+                    hB = CreateSolidBrush(RGB(255,0,0));
+                    FillRect(hdc, &rPole2[i][j], hB);
+                    DeleteObject(hB);
                 }
             }
         }
@@ -1913,6 +2010,20 @@ int WchartSize(wchar_t* mystr) {
     return i;
 }
 
+//перевірити чи не торкається інший корабель
+bool CheckShipPlacement(int x, int y, int size, bool vert, MyPlayers* pl) {
+    for (int i = -1; i <= (vert ? size : 1); ++i) {
+        for (int j = -1; j <= (vert ? 1 : size); ++j) {
+            int nx = x + (vert ? j : i);
+            int ny = y + (vert ? i : j);
+            if (nx >= 0 && ny >= 0 && nx < numKol && ny < numRow) {
+                if (pl->ShipMap.myarena[nx][ny] != 0) return false;
+            }
+        }
+    }
+    return true;
+}
+
 //генерація поля бота
 void SetBotArena() {
     int check = 0;//перевірка правильного розташування
@@ -1933,34 +2044,10 @@ void SetBotArena() {
             i = rand() % numKol;//0..numKol-1
             j = rand() % numRow;
             
-            //перевірка накладання корабля на інший
-            //перевірка встановлення прапора ORIENT
-            if (Orient==1) {
-                //j     //vert
-                for (int k = j;
-                    (k - j) < PlayerSetNow->Ships[SelectMenu].size; k++)
-                {
-                    //перевірка накладання корабля на інший
-                    if (k >= numRow || PlayerSetNow->ShipMap.myarena[i][k] != 0) {
-                        check = 1;
-                    }
-                }
-                if (check)
-                    break;
-            }
-            else {
-                for (int k = i;
-                    (k - i) < PlayerSetNow->Ships[SelectMenu].size; k++)
-                {
-                    //перевірка накладання корабля на інший
-                    if (k >= numKol || PlayerSetNow->ShipMap.myarena[k][j] != 0) {
-                        //MessageBoxA(hWnd, (LPCSTR)"Невірне розташування корабля", (LPCSTR)"Помилка", 0);
-                        check = 1;
-                    }
-                }
-                if (check)
-                    break;
-            }
+            //перевірка накладання корабля на інший та сусідства
+            if (!CheckShipPlacement(i, j, PlayerSetNow->Ships[SelectMenu].size, Orient==1, PlayerSetNow))
+                continue;
+            //додаткові перевірки не потрібні, координати валідні
 
             PlayerSetNow->Ships[SelectMenu].zalishoknums--;
 
@@ -2171,28 +2258,10 @@ void SetMyArena(HWND hWnd,LPARAM lParam) {
                 if(PlayerSetNow->Ships[SetShipPosMenu.nowFocused].zalishoknums > 0){
                     //перевірка накладання корабля на інший
                     //перевірка встановлення прапора ORIENT
-                    if ((flags & (1 << CHECK_ORIENT)) != 0) {
-                        //j     //vert
-                        for (int k = j;
-                            (k - j) < PlayerSetNow->Ships[SetShipPosMenu.nowFocused].size; k++) 
-                        {
-                            //перевірка накладання корабля на інший
-                            if (k >= numRow || PlayerSetNow->ShipMap.myarena[i][k] != 0) {
-                                MessageBoxA(hWnd, (LPCSTR)"Невірне розташування корабля", (LPCSTR)"Помилка", 0);
-                                return;
-                            }
-                        }
-                    }
-                    else {
-                        for (int k = i;
-                            (k - i) < PlayerSetNow->Ships[SetShipPosMenu.nowFocused].size; k++)
-                        {
-                            //перевірка накладання корабля на інший
-                            if (k >= numKol || PlayerSetNow->ShipMap.myarena[k][j] != 0) {
-                                MessageBoxA(hWnd, (LPCSTR)"Невірне розташування корабля", (LPCSTR)"Помилка", 0);
-                                return;
-                            }
-                        }
+                    bool orientVert = ((flags & (1 << CHECK_ORIENT)) != 0);
+                    if (!CheckShipPlacement(i, j, PlayerSetNow->Ships[SetShipPosMenu.nowFocused].size, orientVert, PlayerSetNow)) {
+                        MessageBoxA(hWnd, (LPCSTR)"Невірне розташування корабля", (LPCSTR)"Помилка", 0);
+                        return;
                     }
 
                     //позиціі корабля в пікселях
@@ -2478,6 +2547,11 @@ void Peremoga(HWND hWnd) {
         in << "\n";//новий рядок
     }
     in.close();
+    wchar_t summary[256];
+    swprintf_s(summary, L"Ходи: %d\nПромахи: %d\nПотоплено: %d", Player1.CountShot + Player2.CountShot,
+        (Player1.CountShot - Player1.hits) + (Player2.CountShot - Player2.hits),
+        Player1.Kills + Player2.Kills);
+    MessageBoxW(hWnd, summary, L"Статистика гри", MB_OK);
     ShowWindow(BShowMyArena.hControl, SW_HIDE);
     SendMessageA(hWnd, WM_COMMAND, LOWORD(ID_EXIT_GAME), 0);//кнопка назад
     // ID_EXIT_GAME в кінці
@@ -2501,14 +2575,26 @@ void ResetPlayers() {
 //крок боту
 void BotStep(HWND hWnd) {
         int i = 0, j = 0;
-        //якщо клікнули саме по цій клітинці
-        i = rand() % numKol;
-        j = rand() % numRow;
-        //поки не вибереться тока по якій ще не стріляли
-        while (PlayerOponent->ShipMap.oponentarena[i][j] != 0)
-        {
+        if (botHunting) {
+            int attempts = 0;
+            while (attempts < 4) {
+                int dx[4] = {0,1,0,-1};
+                int dy[4] = {-1,0,1,0};
+                int nx = botLastHitX + dx[botDirIndex];
+                int ny = botLastHitY + dy[botDirIndex];
+                if (nx >=0 && ny>=0 && nx<numKol && ny<numRow && PlayerOponent->ShipMap.oponentarena[nx][ny]==0) {
+                    i = nx; j = ny; break; }
+                botDirIndex = (botDirIndex +1)%4; attempts++;
+            }
+            if (attempts==4) botHunting=false;
+        }
+        if (!botHunting) {
             i = rand() % numKol;
             j = rand() % numRow;
+            while (PlayerOponent->ShipMap.oponentarena[i][j] != 0) {
+                i = rand() % numKol;
+                j = rand() % numRow;
+            }
         }
 
 
@@ -2518,6 +2604,8 @@ void BotStep(HWND hWnd) {
         if (PlayerSetNow->ShipMap.myarena[i][j] != 0) {
             //позначити влучення на мапі
             PlayerOponent->ShipMap.oponentarena[i][j] = 2;
+
+            botLastHitX = i; botLastHitY = j; botHunting = true;
 
             //лічильник влучань
             PlayerOponent->hits++;
@@ -2569,11 +2657,13 @@ void BotStep(HWND hWnd) {
             //
             MessageBoxA(hWnd, messageA_lpcstr, (LPCSTR)"кораблик", 0);
             */
+            botDirIndex = (botDirIndex + 1) % 4;
             BotStep(hWnd);
         }
         else {//якщо не влучили
             //позначити постріл на мапі
             PlayerOponent->ShipMap.oponentarena[i][j] = 1;
+            botDirIndex = (botDirIndex + 1) % 4;
             InvalidateRect(hWnd, NULL, TRUE);
             /*
             //формування рядка для MessageBoxA
